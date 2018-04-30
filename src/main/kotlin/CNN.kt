@@ -77,7 +77,6 @@ fun customConfModel(allTrainDS: DataSet): MultiLayerNetwork {
 
         //Second convolution layer with ReLU as activation function
         .layer(ConvolutionLayer.Builder(6, 6)
-            .nIn(nChannels)
             .stride(2, 2)
             .nOut(50)
             .activation(Activation.RELU)
@@ -110,6 +109,7 @@ fun customConfModel(allTrainDS: DataSet): MultiLayerNetwork {
     val conf = builder.build()
 
     log.info("Build model....")
+
     val model = MultiLayerNetwork(conf).apply {
         init()
         addListeners(ScoreIterationListener(1))
@@ -117,9 +117,8 @@ fun customConfModel(allTrainDS: DataSet): MultiLayerNetwork {
     }
 
     log.info("Train model....")
-//    model.fit(trainData)
-    println("data for fit is " + allTrainDS.featureMatrix.shape().joinToString())
-    model.fit(allTrainDS)
+
+    model.fit(trainData)
 
     return model;
 }
