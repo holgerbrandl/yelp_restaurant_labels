@@ -31,7 +31,8 @@ plugins{
 // https://stackoverflow.com/a/50045271/590437
 application {
 //    mainClassName = "com.github.holgerbrandl.Tester"
-    mainClassName = "DenseModelYelpKt"
+    //    mainClassName = "VggTransferKt"
+    mainClassName = "PredictYelpLabelsKt"
 }
 
 //http://www.gubatron.com/blog/2017/07/20/how-to-run-your-kotlin-gradle-built-app-from-the-command-line/
@@ -64,6 +65,8 @@ dependencies {
     //    compile("org.deeplearning4j" , "deeplearning4j-ui","1.0.0-alpha")
     compile(  "org.imgscalr" , "imgscalr-lib" , "4.2")
 
+
+    compile("me.tongfei", "progressbar", "0.6.0")
 
     testCompile("junit", "junit", "4.12")
 }
