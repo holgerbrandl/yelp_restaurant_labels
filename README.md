@@ -30,7 +30,7 @@ cd ~/projects/deep_learning/kaggle_yelp_rest_pics
 
 # http://www.gubatron.com/blog/2017/07/20/how-to-run-your-kotlin-gradle-built-app-from-the-command-line/
 
-gradle run | tee yelp.$(date +'%Y%m%d').log
+gradle run 2>&1 | tee yelp.$(date +'%Y%m%d').log
 mailme "yelp done in $(pwd)"
 ```
 

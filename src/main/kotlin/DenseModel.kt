@@ -31,7 +31,14 @@ import kotlin.math.ceil
 const val NUM_CLASSES = 2 // number of output classes
 
 //val DATA_ROOT = File("/Users/brandl/projects/deep_learning/dl4j/kaggle_yelp/data")
-val DATA_ROOT = File(System.getProperty("user.home"), "projects/data/yelp-restaurant-photos")
+//val DATA_ROOT = File(System.getProperty("user.home"), "projects/data/yelp-restaurant-photos")
+val DATA_ROOT by lazy {
+    if (System.getProperty("os.name").contains("Mac OS"))
+        File("/Volumes/talisker/projects/data/yelp-restaurant-photos")
+    else {
+        File(System.getProperty("user.home"), "projects/data/yelp-restaurant-photos")
+    }
+}
 
 
 fun loadImages(path: File): Pair<List<File>, List<DoubleArray>> {

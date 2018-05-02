@@ -1,4 +1,3 @@
-import org.deeplearning4j.datasets.iterator.impl.ListDataSetIterator
 import org.deeplearning4j.eval.Evaluation
 import org.deeplearning4j.nn.api.Model
 import org.deeplearning4j.nn.api.OptimizationAlgorithm
@@ -13,28 +12,28 @@ import org.deeplearning4j.nn.weights.WeightInit
 import org.deeplearning4j.optimize.api.BaseTrainingListener
 import org.deeplearning4j.optimize.listeners.ScoreIterationListener
 import org.nd4j.linalg.activations.Activation
-import org.nd4j.linalg.dataset.DataSet
-import org.nd4j.linalg.dataset.SplitTestAndTrain
+import org.nd4j.linalg.dataset.api.iterator.DataSetIterator
 import org.nd4j.linalg.learning.config.Nesterovs
 import org.nd4j.linalg.lossfunctions.LossFunctions
 import org.slf4j.LoggerFactory
 import java.io.IOException
-import java.util.*
-import kotlin.math.ceil
 
 
 @Throws(IOException::class)
-fun customConfModel(allTrainDS: DataSet): MultiLayerNetwork {
+fun customConfModel(trainData: DataSetIterator, validationData: DataSetIterator): MultiLayerNetwork {
 
-    println("train shape  is " + allTrainDS.featureMatrix.shape().joinToString())
-    println("label shape  is " + allTrainDS.labels.shape().joinToString())
+    val firstBatch = trainData.next()
+    trainData.reset()
 
-    val splitTrainNum = ceil(allTrainDS.numExamples() * 0.8).toInt() // 80/20 training/test split
-    val dataSplit: SplitTestAndTrain = allTrainDS.splitTestAndTrain(splitTrainNum, Random(42))
+    val nFeatures = firstBatch.featureMatrix.getRow(0).length().toDouble() // hyper, hyper parameter
+    val nLabels = firstBatch.labels.getRow(0).length()
 
-    val batchSize = 128
-    val trainData = ListDataSetIterator(dataSplit.train.asList(), batchSize)
-    val testData = ListDataSetIterator(dataSplit.test.asList(), batchSize)
+    println("number of features is ${nFeatures} and the number of labels is ${nLabels}")
+
+    val numRows = firstBatch.featureMatrix.shape()[2]
+    val numColumns = firstBatch.featureMatrix.shape()[3] // numRows * numColumns must equal columns in initial data * channels
+    val nChannels = 3 // would be 3 if color image w R,G,B
+
 
     // todo later: run multiple epochs over the data
     //    val numEpochs = 15 // number of epochs to perform
@@ -42,15 +41,6 @@ fun customConfModel(allTrainDS: DataSet): MultiLayerNetwork {
 
 
     val log = LoggerFactory.getLogger("conv_model_trainer")
-
-    val nFeatures = dataSplit.train.featureMatrix.getRow(0).length().toDouble() // hyper, hyper parameter
-    val nLabels = dataSplit.train.labels.getRow(0).length()
-
-    println("number of features is ${nFeatures} and the number of labels is ${nLabels}")
-
-    val numRows = dataSplit.train.featureMatrix.shape()[2]
-    val numColumns = dataSplit.train.featureMatrix.shape()[3] // numRows * numColumns must equal columns in initial data * channels
-    val nChannels = 3 // would be 3 if color image w R,G,B
 
     val outputNum = NUM_CLASSES // # of classes (# of columns in output)
 
@@ -125,7 +115,7 @@ fun customConfModel(allTrainDS: DataSet): MultiLayerNetwork {
 
         addListeners(object : BaseTrainingListener() {
             override fun onEpochEnd(model: Model?) {
-                (model as MultiLayerNetwork).evaluateOn(testData).let {
+                (model as MultiLayerNetwork).evaluateOn(validationData).let {
                     // tood maybe log epoch with layers.last().epochCount
                     println("model metrics after epoch, are ${it.stats()}")
                 }
@@ -141,13 +131,13 @@ fun customConfModel(allTrainDS: DataSet): MultiLayerNetwork {
     model.fit(trainData)
 
     // do final evaluation
-    println("final model performance is ${model.evaluateOn(testData).stats()}")
+    println("final model performance is ${model.evaluateOn(validationData).stats()}")
 
     return model;
 }
 
 
-private fun MultiLayerNetwork.evaluateOn(testData: ListDataSetIterator<DataSet>): Evaluation {
+private fun MultiLayerNetwork.evaluateOn(testData: DataSetIterator): Evaluation {
     // note this way to detect the number of output classes may not work depending on model topology
     //    testData.train.labels.getRow(0).length()
     val numClasses = layers.last().paramTable().get("b")!!.shape()[1]
