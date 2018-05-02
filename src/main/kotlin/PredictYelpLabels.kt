@@ -1,4 +1,3 @@
-import org.deeplearning4j.nn.multilayer.MultiLayerNetwork
 import org.nd4j.linalg.api.ndarray.INDArray
 import org.nd4j.linalg.factory.Nd4j
 import java.io.File
@@ -48,10 +47,10 @@ fun main(args: Array<String>) {
 
 
     //        val (model, modelName)  = buildVggTransferModel(allTrainDS)!! to "vgg_transfer"
-    //        val (model, modelName) = customConfModel(trainData, validationData) to "custom_cnn";
+    val (model, modelName) = customConfModel(trainData, validationData) to "custom_cnn";
     //        model.save(File("dense_model.${modelName}.${now}.dat"))
     //    val model =     MultiLayerNetwork.load(File("dense_model.modelName.2018-05-02T09_41_20.898.dat"),false)
-    val model = MultiLayerNetwork.load(mostRecent("dense_model.custom_cnn"), false)
+    //    val model = MultiLayerNetwork.load(mostRecent("dense_model.custom_cnn"), false)
 
 
     println("Evaluating model....")
