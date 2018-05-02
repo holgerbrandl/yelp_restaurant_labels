@@ -1,5 +1,6 @@
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork
 import org.nd4j.linalg.api.ndarray.INDArray
+import org.nd4j.linalg.factory.Nd4j
 import java.io.File
 import java.io.FileFilter
 import kotlin.coroutines.experimental.buildSequence
@@ -47,30 +48,27 @@ fun main(args: Array<String>) {
 
 
     //        val (model, modelName)  = buildVggTransferModel(allTrainDS)!! to "vgg_transfer"
-
-    //    val (model, modelName) = customConfModel(trainData, validationData) to "custom_cnn";
-    //    model.save(File("dense_model.${modelName}.${now}.dat"))
+    //        val (model, modelName) = customConfModel(trainData, validationData) to "custom_cnn";
+    //        model.save(File("dense_model.${modelName}.${now}.dat"))
     //    val model =     MultiLayerNetwork.load(File("dense_model.modelName.2018-05-02T09_41_20.898.dat"),false)
     val model = MultiLayerNetwork.load(mostRecent("dense_model.custom_cnn"), false)
 
 
-    println("Evaluate model....")
+    println("Evaluating model....")
 
 
-    val testDataIt = prepareTestData(File(DATA_ROOT, "test_photos"), numExamples = 5000)
+    val testDataIt = prepareTestData(File(DATA_ROOT, "test_photos"), batchSize = 500, numExamples = 5000)
 
-    testDataIt.forEach { evalData ->
+    testDataIt.forEach { (files, ndFeatures) ->
         // subset INDArray directly
-        //evalData.second.get(interval(0, 10))
+        //evalData.ndFeatures.get(interval(0, 10))
 
-        println("shape of eval data is ${evalData.second.shapeInfoToString()}")
+        println("shape of eval data is ${ndFeatures.shapeInfoToString()}")
 
-        val modelOut = model.output(evalData.second)
+        Nd4j.saveBinary(ndFeatures, File("too_much_data.dat"))
 
-        //    // peak into actual predictions
-        //    for(i in 1 ..10){
-        //        modelOut.getRow(i).toDoubleVector().joinToString().let(::println)
-        //    }
+        val modelOut = model.output(ndFeatures)
+
 
         // recast output depending on model type (multilayer vs computation graph
         val testOuput = when (modelOut) {
@@ -91,9 +89,9 @@ fun main(args: Array<String>) {
         val photo2business = readPhoto2BusinessModel(File(DATA_ROOT, "test_photo_to_biz.csv"))
 
 
-        require(evalData.first.size == submissionLabels.size)
+        require(files.size == submissionLabels.size)
 
-        val submissionData = evalData.first
+        val submissionData = files
             .zip(submissionLabels)
             .map { photo2business[it.first.nameWithoutExtension]!! to it.second }
             .groupBy { it.first }

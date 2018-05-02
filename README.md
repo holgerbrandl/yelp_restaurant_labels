@@ -32,6 +32,7 @@ cd ~/projects/deep_learning/kaggle_yelp_rest_pics
 
 gradle run 2>&1 | tee yelp.$(date +'%Y%m%d').log
 mailme "yelp done in $(pwd)"
+
 ```
 
 ## Misc

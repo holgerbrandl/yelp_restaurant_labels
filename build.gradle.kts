@@ -47,16 +47,21 @@ val kotlin_version: String by extra
 
 repositories {
     mavenCentral()
+    maven("https://oss.sonatype.org/content/repositories/snapshots")
 }
+
+val nd4jVersion = "1.0.0-alpha"
+// https://deeplearning4j.org/snapshots
+//val nd4jVersion = "1.0.0-SNAPSHOT"
 
 dependencies {
     compile(kotlinModule("stdlib-jdk8", kotlin_version))
 
     compile("org.nd4j","nd4j-native-platform","1.0.0-alpha")
     compile("org.nd4j","nd4s_2.11","0.7.2")
-    compile("org.deeplearning4j","deeplearning4j-core","1.0.0-alpha")
-    compile("org.deeplearning4j","deeplearning4j-zoo","1.0.0-alpha")
-    compile("org.deeplearning4j","deeplearning4j-nn","1.0.0-alpha")
+    compile("org.deeplearning4j", "deeplearning4j-core", nd4jVersion)
+    compile("org.deeplearning4j", "deeplearning4j-zoo", nd4jVersion)
+    compile("org.deeplearning4j", "deeplearning4j-nn", nd4jVersion)
 
     // http://saltnlight5.blogspot.de/2013/08/how-to-configure-slf4j-with-different.html
     // compile("org.slf4j:slf4j-simple:1.7.25")
