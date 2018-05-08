@@ -50,13 +50,16 @@ fun main(args: Array<String>) {
     val (model, modelName) = customConfModel(trainData, validationData) to "custom_cnn";
     //        model.save(File("dense_model.${modelName}.${now}.dat"))
     //    val model =     MultiLayerNetwork.load(File("dense_model.modelName.2018-05-02T09_41_20.898.dat"),false)
-    //    val model = MultiLayerNetwork.load(mostRecent("dense_model.custom_cnn"), false)
+    //        val model =     MultiLayerNetwork.load(File("dense_model.custom_cnn.2018-05-02T16_19_27.471.dat"),false)
+    //        val model = MultiLayerNetwork.load(mostRecent("dense_model.custom_cnn"), false)
 
 
     println("Evaluating model....")
+    //    println(model.summary())
+    //    println(model.conf().toJson())
 
 
-    val testDataIt = prepareTestData(File(DATA_ROOT, "test_photos"), batchSize = 500, numExamples = 5000)
+    val testDataIt = prepareTestData(File(DATA_ROOT, "test_photos"), batchSize = 256, numExamples = 5000)
 
     testDataIt.forEach { (files, ndFeatures) ->
         // subset INDArray directly

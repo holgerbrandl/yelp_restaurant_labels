@@ -34,7 +34,10 @@ const val NUM_CLASSES = 2 // number of output classes
 //val DATA_ROOT = File(System.getProperty("user.home"), "projects/data/yelp-restaurant-photos")
 val DATA_ROOT by lazy {
     if (System.getProperty("os.name").contains("Mac OS"))
-        File("/Volumes/talisker/projects/data/yelp-restaurant-photos")
+    //        File("/Volumes/talisker/projects/data/yelp-restaurant-photos")
+    //    File(System.getProperty("user.home"), "projects/data/yelp-restaurant-photos")
+        File("/Users/brandl/projects/deep_learning/kaggle_yelp_rest_pics/data")
+
     else {
         File(System.getProperty("user.home"), "projects/data/yelp-restaurant-photos")
     }

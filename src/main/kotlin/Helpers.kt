@@ -179,9 +179,6 @@ fun createDataIterator(
 
         // https://kotlinlang.org/docs/reference/classes.html
         init {
-
-            val photo2business = readPhoto2BusinessModel(File(DATA_ROOT, "train_photo_to_biz_ids.csv"))
-
             val jpgFiles = path.listFiles({ file -> file.extension == "jpg" }).take(maxExamples)
             val splitTrainNum = ceil(jpgFiles.size * 0.8).toInt() // 80/20 training/test split
 

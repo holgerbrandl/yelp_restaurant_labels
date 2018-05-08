@@ -58,6 +58,7 @@ dependencies {
     compile(kotlinModule("stdlib-jdk8", kotlin_version))
 
     compile("org.nd4j","nd4j-native-platform","1.0.0-alpha")
+    //    compile("org.nd4j","nd4j-cuda-8.0-platform","1.0.0-alpha")
     compile("org.nd4j","nd4s_2.11","0.7.2")
     compile("org.deeplearning4j", "deeplearning4j-core", nd4jVersion)
     compile("org.deeplearning4j", "deeplearning4j-zoo", nd4jVersion)
@@ -72,6 +73,8 @@ dependencies {
 
 
     compile("me.tongfei", "progressbar", "0.6.0")
+
+    compile("com.github.haifengl", "smile-core", "1.5.1")
 
     testCompile("junit", "junit", "4.12")
 }

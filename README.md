@@ -53,7 +53,21 @@ find test_photos -name "._*.jpg" -print0 | xargs -0 rm
 
 ```
 
+## Todo
 
+What to use as base-line classifier vgg + custom dense layer?
+
+Better use http://scikit-learn.org/stable/modules/generated/sklearn.naive_bayes.MultinomialNB.html as baseline (not random guessing https://machinelearningmastery.com/dont-use-random-guessing-as-your-baseline-classifier/)
+
+E.g. use https://haifengl.github.io/smile/api/java/smile/classification/NaiveBayes.Model.html
+
+Also see https://haifengl.github.io/smile/classification.html
+
+Or even just Zero Rule (or 0R or ZeroR for short). It is the simplest rule you can use on a classification problem and it simply predicts the majority class in your dataset (e.g. the [mode](https://en.wikipedia.org/wiki/Mode_(statistics))).
+
+
+
+http://scikit-learn.org/stable/modules/generated/sklearn.dummy.DummyClassifier.html
 
 
 
