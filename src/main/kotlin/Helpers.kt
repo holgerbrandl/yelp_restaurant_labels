@@ -105,6 +105,19 @@ internal fun BufferedImage.removeAlphaChannel(): BufferedImage {
     return copy
 }
 
+
+enum class YelpLabel {
+    GOOD_FOR_LUNCH,
+    GOOD_FOR_DINNER,
+    TAKES_RESERVATIONS,
+    OUTDOOR_SEATING,
+    RESTAURANT_IS_EXPENSIVE,
+    HAS_ALCOHOL,
+    HAS_TABLE_SERVICE,
+    AMBIENCE_IS_CLASSY,
+    GOOD_FOR_KIDS
+}
+
 open class File2LabelConverter() {
 
     val businessLabels by lazy {
@@ -146,16 +159,18 @@ open class File2LabelConverter() {
     fun getLabels(imageFile: File): List<Int> = getLabels(imageFile.nameWithoutExtension)
 
     open val allLabels by lazy { businessLabels.values.flatten().distinct().map { it.toString() } }
+
+    val numClasses get() = allLabels.size
 }
 
 
-class TwoClassLabelConverter(val classIndex: Int) : File2LabelConverter() {
+class TwoClassLabelConverter(val label: YelpLabel) : File2LabelConverter() {
     override fun getLabels(it: String): List<Int> {
         val businessID = photo2business[it]!!
 
         var imageLabels = businessLabels[businessID]!!
 
-        return if (imageLabels.contains(classIndex)) listOf(1) else listOf(0)
+        return if (imageLabels.contains(label.ordinal)) listOf(1) else listOf(0)
     }
 
     override val allLabels: List<String>
@@ -163,32 +178,34 @@ class TwoClassLabelConverter(val classIndex: Int) : File2LabelConverter() {
 }
 
 
-fun createRecReaderDataIterator(
-    path: File,
+val trafo = object : BaseImageTransform<Double>() {
+    override fun doTransform(image: ImageWritable?, random: Random?): ImageWritable {
+        val bufferedImage = Java2DFrameUtils.toBufferedImage(image!!.frame)
+        //            val bufferedImage = Java2DFrameConverter.cloneBufferedImage(image.frame)
+
+        val transformed = bufferedImage.removeAlphaChannel()
+
+        return ImageWritable(Java2DFrameUtils.toFrame(transformed))
+        //            return image
+    }
+}
+
+fun createTrainRecReaderDataIterator(
+    files: List<File>,
     batchSize: Int = 256,
     maxExamples: Int = Int.MAX_VALUE,
-    labelConverter: File2LabelConverter = File2LabelConverter()
+    labelConverter: File2LabelConverter? = null
 ): RecordReaderDataSetIterator {
 
     // todo simplify to just use PathLabelGenerator in case of 2 classes
     //    val labelConverter = TwoClassLabelConverter(3)
 
 
-    val trafo = object : BaseImageTransform<Double>() {
-        override fun doTransform(image: ImageWritable?, random: Random?): ImageWritable {
-            val bufferedImage = Java2DFrameUtils.toBufferedImage(image!!.frame)
-            //            val bufferedImage = Java2DFrameConverter.cloneBufferedImage(image.frame)
-
-            val transformed = bufferedImage.removeAlphaChannel()
-
-            return ImageWritable(Java2DFrameUtils.toFrame(transformed))
-            //            return image
+    val pathLabelGen = labelConverter?.let {
+        PathMultiLabelGenerator { uriPath ->
+            //            return listOf(LongWritable(1))
+            it.getLabels(File(uriPath)).map { IntWritable(it) }
         }
-    }
-
-    val pathLabelGen = PathMultiLabelGenerator { uriPath ->
-        //            return listOf(LongWritable(1))
-        labelConverter.getLabels(File(uriPath)).map { IntWritable(it) }
     }
 
 
@@ -196,7 +213,7 @@ fun createRecReaderDataIterator(
         init {
             imageTransform = trafo
 
-            val jpgFiles = path.listFiles({ file -> file.extension == "jpg" }).take(maxExamples)
+            val jpgFiles = files.take(maxExamples).also { require(it.all { it.extension == "jpg" }) }
             //            val splitTrainNum = ceil(jpgFiles.size * 0.8).toInt() // 80/20 training/test split
 
             initialize(CollectionInputSplit(jpgFiles.map { it.toURI() }))
@@ -205,6 +222,27 @@ fun createRecReaderDataIterator(
 
 
     return RecordReaderDataSetIterator(recordReader, batchSize, 1, 2)
+}
+
+fun createTestRecReaderDataIterator(
+    path: File,
+    batchSize: Int = 256,
+    maxExamples: Int = Int.MAX_VALUE
+): RecordReaderDataSetIterator {
+
+    val recordReader = object : ImageRecordReader(224, 224, 3) {
+        init {
+            imageTransform = trafo
+
+            val jpgFiles = path.listFiles({ file -> file.extension == "jpg" })
+                .take(maxExamples)
+                .map { it.toURI() }
+
+            initialize(CollectionInputSplit(jpgFiles))
+        }
+    }
+
+    return RecordReaderDataSetIterator(recordReader, batchSize).apply { isCollectMetaData = true }
 }
 
 

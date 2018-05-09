@@ -1,4 +1,6 @@
-import org.deeplearning4j.eval.Evaluation
+import org.datavec.api.records.metadata.RecordMetaDataURI
+import org.deeplearning4j.datasets.datavec.RecordReaderDataSetIterator
+import org.deeplearning4j.datasets.iterator.MultipleEpochsIterator
 import org.deeplearning4j.nn.api.Model
 import org.deeplearning4j.nn.api.OptimizationAlgorithm
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration
@@ -16,11 +18,86 @@ import org.nd4j.linalg.dataset.api.iterator.DataSetIterator
 import org.nd4j.linalg.learning.config.Nesterovs
 import org.nd4j.linalg.lossfunctions.LossFunctions
 import org.slf4j.LoggerFactory
+import java.io.File
+import java.io.FileFilter
 import java.io.IOException
+import kotlin.coroutines.experimental.buildSequence
+import kotlin.math.roundToInt
 
+/**
+ * @author Holger Brandl
+ */
+
+fun main(args: Array<String>) {
+    configureLogger()
+
+    val file2Label = TwoClassLabelConverter(YelpLabel.GOOD_FOR_KIDS)
+
+    val (trainData, validationData) = prepareTrainingData(file2Label)
+
+
+    println("Building model....")
+
+
+    //        val (model, modelName)  = buildVggTransferModel(allTrainDS)!! to "vgg_transfer"
+
+    //    val (model, modelName) = customConfModel(trainData, validationData, file2Label.numClasses) to "custom_cnn";
+    //        model.save(File("${modelName}.${now}.dat"))
+
+    //    val model =     MultiLayerNetwork.load(File("dense_model.modelName.2018-05-02T09_41_20.898.dat"),false)
+    //        val model =     MultiLayerNetwork.load(File("dense_model.custom_cnn.2018-05-02T16_19_27.471.dat"),false)
+    val model = MultiLayerNetwork.load(mostRecent("custom_cnn"), false)
+
+
+    println("Evaluating model....")
+    //    println(model.summary())
+    //    println(model.conf().toJson())
+
+
+    val testDataIterator = createTestRecReaderDataIterator(File(DATA_ROOT, "test_photos"), maxExamples = 500)
+
+    //        val exampleMetaData = dataSet.exampleMetaData
+    for (testData in testDataIterator) {
+        val testPrediction = model.output(testData.featureMatrix)
+
+        val files = testData
+            .getExampleMetaData(RecordMetaDataURI::class.java)
+            .map { File(it.uri) }
+
+
+        // for multi-class detection
+        //        val testPrediction = model.output(testData.featureMatrix)
+        val submissionLabels = buildSequence {
+            with(testPrediction) {
+                for (i in 0 until rows())
+                    yield(getRow(i).toDoubleVector().withIndex().filter { it.value > 0.5 }.indices.toList())
+            }
+        }.toList()
+
+
+
+        val photo2business = readPhoto2BusinessModel(File(DATA_ROOT, "test_photo_to_biz.csv"))
+
+
+        val submissionData = files
+            .zip(submissionLabels)
+            .map { photo2business[it.first.nameWithoutExtension]!! to it.second }
+            .groupBy { it.first }
+            .mapValues { (_, labels) -> labels.flatMap { it.second }.distinct() }
+
+        File("kaggle_submission.${now}.txt").printWriter().use { pw ->
+            // the submission format should be business_id to labels
+            pw.write("business_id\tlabels\n")
+
+            submissionData.forEach {
+                pw.write("${it.key}, ${it.value.joinToString { " " }}\n")
+            }
+        }
+    }
+}
 
 @Throws(IOException::class)
-fun customConfModel(trainData: DataSetIterator, validationData: DataSetIterator, numClasses: Int): MultiLayerNetwork {
+fun multiClassCNN(trainData: DataSetIterator, validationData: DataSetIterator, numClasses: Int): MultiLayerNetwork {
 
     val firstBatch = trainData.next()
     trainData.reset()
@@ -37,7 +114,7 @@ fun customConfModel(trainData: DataSetIterator, validationData: DataSetIterator,
 
     // todo later: run multiple epochs over the data
     //    val numEpochs = 15 // number of epochs to perform
-    //    val epochitTr = MultipleEpochsIterator(4, dataSplit.train)
+    val epochitTr = MultipleEpochsIterator(4, trainData)
 
 
     val log = LoggerFactory.getLogger("conv_model_trainer")
@@ -88,17 +165,12 @@ fun customConfModel(trainData: DataSetIterator, validationData: DataSetIterator,
 
         // Final and fully connected layer with Softmax as activation function
         // multi-label
-        //        .layer(OutputLayer.Builder(LossFunctions.LossFunction.XENT) // aka binary cross entropy
-        //            .nOut(outputNum)
-        //            .weightInit(WeightInit.XAVIER)
-        //            .activation(Activation.SIGMOID)
-        //            .build())
-        // single lable
-        .layer(OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD) // aka binary cross entropy
+        .layer(OutputLayer.Builder(LossFunctions.LossFunction.XENT) // aka binary cross entropy
             .nOut(outputNum)
             .weightInit(WeightInit.XAVIER)
-            .activation(Activation.SOFTMAX)
+            .activation(Activation.SIGMOID)
             .build())
+
 
         .backprop(true).pretrain(false)
         .setInputType(InputType.convolutional(numRows, numColumns, nChannels))
@@ -128,7 +200,8 @@ fun customConfModel(trainData: DataSetIterator, validationData: DataSetIterator,
     log.info("Train model....")
 
 
-    model.fit(trainData)
+    //    model.fit(trainData)
+    model.fit(epochitTr)
 
     // do final evaluation
     println("final model performance is ${model.evaluateOn(validationData).stats()}")
@@ -137,17 +210,32 @@ fun customConfModel(trainData: DataSetIterator, validationData: DataSetIterator,
 }
 
 
-private fun MultiLayerNetwork.evaluateOn(testData: DataSetIterator): Evaluation {
-    // note this way to detect the number of output classes may not work depending on model topology
-    //    testData.train.labels.getRow(0).length()
-    val numClasses = layers.last().paramTable().get("b")!!.shape()[1]
+fun prepareTrainingData(file2Label: TwoClassLabelConverter, validatitionProp: Double = 0.2, maxExamples: Int = Int.MAX_VALUE, batchSize: Int = 255): Pair<RecordReaderDataSetIterator, RecordReaderDataSetIterator> {
+    val allFiles = File(DATA_ROOT, "train_photos")
+        .listFiles({ file -> file.extension == "jpg" }).toList()
+        .take(maxExamples)
 
-    val eval = Evaluation(numClasses)
+    val iterator = allFiles.shuffled().iterator()
 
-    for (ds in testData) {
-        val output = output(ds.featureMatrix, false)
-        eval.eval(ds.getLabels(), output)
-    }
+    val trainData = createTrainRecReaderDataIterator(
+        iterator.asSequence().take((allFiles.size * (1 - validatitionProp)).roundToInt()).toList(),
+        batchSize = batchSize,
+        labelConverter = file2Label
+    )
 
-    return eval
+    val validationData = createTrainRecReaderDataIterator(
+        iterator.asSequence().toList(),
+        batchSize = batchSize,
+        labelConverter = file2Label
+    )
+
+    return trainData to validationData
 }
+
+fun mostRecent(prefix: String): File? = File(".")
+    .listFiles(FileFilter { it.name.startsWith(prefix) })
+    .sortedBy { it.lastModified() }
+    .last()
+    .also { println("most recent model is ${it}") }
+
+data class ImageInfo(val rows: Int, val columns: Int, val channels: Int)
