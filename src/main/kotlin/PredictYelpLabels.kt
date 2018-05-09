@@ -39,15 +39,30 @@ fun main(args: Array<String>) {
 
     // rather use train iterator
     // train total=234842; test total=237152
-    val trainData = createDataIterator(File(DATA_ROOT, "train_photos"), maxExamples = 50000)
-    val validationData = createDataIterator(File(DATA_ROOT, "train_photos"), isTrain = false, maxExamples = 5000)
+    //    val trainData = createDataIterator(File(DATA_ROOT, "train_photos"), maxExamples = 50000)
+    //    val validationData = createDataIterator(File(DATA_ROOT, "train_photos"), isTrain = false, maxExamples = 5000)
+    //    val file2Label = File2LabelConverter()
+    val file2Label = TwoClassLabelConverter(3)
+
+    val trainData = createRecReaderDataIterator(
+        File(DATA_ROOT, "train_photos"),
+        batchSize = 50,
+        maxExamples = 50000,
+        labelConverter = file2Label
+    )
+
+    val validationData = createRecReaderDataIterator(
+        File(DATA_ROOT, "test_photos"),
+        maxExamples = 5000,
+        labelConverter = file2Label
+    )
 
 
     println("Building model....")
 
 
     //        val (model, modelName)  = buildVggTransferModel(allTrainDS)!! to "vgg_transfer"
-    val (model, modelName) = customConfModel(trainData, validationData) to "custom_cnn";
+    val (model, modelName) = customConfModel(trainData, validationData, file2Label.allLabels.size) to "custom_cnn";
     //        model.save(File("dense_model.${modelName}.${now}.dat"))
     //    val model =     MultiLayerNetwork.load(File("dense_model.modelName.2018-05-02T09_41_20.898.dat"),false)
     //        val model =     MultiLayerNetwork.load(File("dense_model.custom_cnn.2018-05-02T16_19_27.471.dat"),false)

@@ -20,7 +20,7 @@ import java.io.IOException
 
 
 @Throws(IOException::class)
-fun customConfModel(trainData: DataSetIterator, validationData: DataSetIterator): MultiLayerNetwork {
+fun customConfModel(trainData: DataSetIterator, validationData: DataSetIterator, numClasses: Int): MultiLayerNetwork {
 
     val firstBatch = trainData.next()
     trainData.reset()
@@ -42,7 +42,7 @@ fun customConfModel(trainData: DataSetIterator, validationData: DataSetIterator)
 
     val log = LoggerFactory.getLogger("conv_model_trainer")
 
-    val outputNum = NUM_CLASSES // # of classes (# of columns in output)
+    val outputNum = numClasses // # of classes (# of columns in output)
 
 
     val builder = NeuralNetConfiguration.Builder()

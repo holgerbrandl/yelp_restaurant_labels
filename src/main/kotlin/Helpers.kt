@@ -1,10 +1,14 @@
-import me.tongfei.progressbar.ProgressBar
-import org.datavec.image.loader.Java2DNativeImageLoader
-import org.deeplearning4j.datasets.iterator.BaseDatasetIterator
+import archive.loadImagesVGG
+import org.bytedeco.javacv.Java2DFrameUtils
+import org.datavec.api.io.labels.PathMultiLabelGenerator
+import org.datavec.api.split.CollectionInputSplit
+import org.datavec.api.writable.IntWritable
+import org.datavec.image.data.ImageWritable
+import org.datavec.image.recordreader.ImageRecordReader
+import org.datavec.image.transform.BaseImageTransform
+import org.deeplearning4j.datasets.datavec.RecordReaderDataSetIterator
 import org.imgscalr.Scalr
 import org.nd4j.linalg.api.ndarray.INDArray
-import org.nd4j.linalg.dataset.DataSet
-import org.nd4j.linalg.dataset.api.iterator.fetcher.BaseDataFetcher
 import org.nd4j.linalg.factory.Nd4j
 import org.slf4j.LoggerFactory
 import java.awt.Color
@@ -12,11 +16,10 @@ import java.awt.image.BufferedImage
 import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.*
 import java.util.logging.Level
 import java.util.logging.LogManager
-import javax.imageio.ImageIO
 import kotlin.coroutines.experimental.buildSequence
-import kotlin.math.ceil
 
 /**
  * @author Holger Brandl
@@ -102,30 +105,7 @@ internal fun BufferedImage.removeAlphaChannel(): BufferedImage {
     return copy
 }
 
-/**
- * @author Holger Brandl
- */
-
-
-fun List<File>.loadImagesVGG(): Pair<List<File>, List<INDArray>> {
-    //        .take(50)
-
-
-    val imageData = ProgressBar.wrap(this, "Preparing Images").map {
-        ImageIO.read(it)
-            .makeSquare()
-            // todo it seems that vgg is using 224x224 as input dim
-            .resize(224, 224)
-            .removeAlphaChannel()
-            .let {
-                Java2DNativeImageLoader(it.height, it.width, 3).asMatrix(it)
-            }
-    }
-
-    return Pair(this, imageData)
-}
-
-class File2LabelConverter() {
+open class File2LabelConverter() {
 
     val businessLabels by lazy {
         File(DATA_ROOT, "train.csv").readLines().drop(1).map {
@@ -146,102 +126,101 @@ class File2LabelConverter() {
         }.toMap()
     }
 
-    val photo2business by lazy { readPhoto2BusinessModel(File(DATA_ROOT, "train_photo_to_biz_ids.csv")) }
+    protected val photo2business by lazy { readPhoto2BusinessModel(File(DATA_ROOT, "train_photo_to_biz_ids.csv")) }
 
-    fun buildIndicator(it: String): List<Int> {
+    open fun getLabels(it: String): List<Int> {
         val businessID = photo2business[it]!!
 
         var imageLabels = businessLabels[businessID]!!
 
         // simplify problem to use a single category only
-        imageLabels = listOf(1) - imageLabels
+        //        if(NUM_CLASSES==2) {
+        //            imageLabels = listOf(1) - imageLabels
+        //        }
 
         // convert to indicator vector
-        return IntArray(NUM_CLASSES, { if (imageLabels.contains(it)) 1 else 0 }).toList()
+        //        return IntArray(allLabels.size, { if (imageLabels.contains(it)) 1 else 0 }).toList()
+        return imageLabels
     }
+
+    fun getLabels(imageFile: File): List<Int> = getLabels(imageFile.nameWithoutExtension)
+
+    open val allLabels by lazy { businessLabels.values.flatten().distinct().map { it.toString() } }
 }
 
 
-fun createDataIterator(
+class TwoClassLabelConverter(val classIndex: Int) : File2LabelConverter() {
+    override fun getLabels(it: String): List<Int> {
+        val businessID = photo2business[it]!!
+
+        var imageLabels = businessLabels[businessID]!!
+
+        return if (imageLabels.contains(classIndex)) listOf(1) else listOf(0)
+    }
+
+    override val allLabels: List<String>
+        get() = listOf("0", "1")
+}
+
+
+fun createRecReaderDataIterator(
     path: File,
-    isTrain: Boolean = true,
     batchSize: Int = 256,
-    maxExamples: Int = Int.MAX_VALUE
-): BaseDatasetIterator {
+    maxExamples: Int = Int.MAX_VALUE,
+    labelConverter: File2LabelConverter = File2LabelConverter()
+): RecordReaderDataSetIterator {
 
-    val dataFetcher = object : BaseDataFetcher() {
-
-        val numExamples: Int
-
-        val labelConverter by lazy { File2LabelConverter() }
-
-        val batches: Iterator<List<File>>
-
-        // https://kotlinlang.org/docs/reference/classes.html
-        init {
-            val jpgFiles = path.listFiles({ file -> file.extension == "jpg" }).take(maxExamples)
-            val splitTrainNum = ceil(jpgFiles.size * 0.8).toInt() // 80/20 training/test split
+    // todo simplify to just use PathLabelGenerator in case of 2 classes
+    //    val labelConverter = TwoClassLabelConverter(3)
 
 
-            val splitPart = if (isTrain) jpgFiles.take(splitTrainNum) else jpgFiles.drop(splitTrainNum)
+    val trafo = object : BaseImageTransform<Double>() {
+        override fun doTransform(image: ImageWritable?, random: Random?): ImageWritable {
+            val bufferedImage = Java2DFrameUtils.toBufferedImage(image!!.frame)
+            //            val bufferedImage = Java2DFrameConverter.cloneBufferedImage(image.frame)
 
-            numExamples = splitPart.size
-            batches = splitPart.chunked(size = batchSize).iterator()
+            val transformed = bufferedImage.removeAlphaChannel()
 
-            //            val it = seq.iterator()
-            //            it.asSequence().take(3).toList() // [1, 2, 3]
-            //            it.asSequence().take(3).toList() // [4, 5, 6]
+            return ImageWritable(Java2DFrameUtils.toFrame(transformed))
+            //            return image
         }
+    }
 
-        override fun next(): DataSet {
-            // for a reference example see org.deeplearning4j.datasets.fetchers.MnistDataFetcher.fetch
-            val (images, imageData) = batches.next().loadImagesVGG()
-
-
-            val labels = images.map { it.nameWithoutExtension }.map { labelConverter.buildIndicator(it) }
-
-            // https://nd4j.org/userguide#creating
-            // val data =listOf(Nd4j.create(doubleArrayOf(12.0,3.0)), Nd4j.create(doubleArrayOf(12.0,3.0)))
-
-            val ndFeatures = Nd4j.vstack(imageData.map { it })
-            val ndLabels = Nd4j.vstack(labels.map { Nd4j.create(it) })
-
-            return DataSet(ndFeatures, ndLabels)
-        }
-
-        override fun fetch(numExamples: Int) {
-            // not needed since we have the data already but we could actually call kaggle api here
-        }
-
-        override fun hasMore(): Boolean {
-            return batches.hasNext()
-        }
-
-        override fun totalExamples(): Int = numExamples
+    val pathLabelGen = PathMultiLabelGenerator { uriPath ->
+        //            return listOf(LongWritable(1))
+        labelConverter.getLabels(File(uriPath)).map { IntWritable(it) }
     }
 
 
-    return BaseDatasetIterator(batchSize, -1, dataFetcher)
+    val recordReader = object : ImageRecordReader(224, 224, 3, pathLabelGen) {
+        init {
+            imageTransform = trafo
+
+            val jpgFiles = path.listFiles({ file -> file.extension == "jpg" }).take(maxExamples)
+            //            val splitTrainNum = ceil(jpgFiles.size * 0.8).toInt() // 80/20 training/test split
+
+            initialize(CollectionInputSplit(jpgFiles.map { it.toURI() }))
+        }
+    }
+
+
+    return RecordReaderDataSetIterator(recordReader, batchSize, 1, 2)
 }
 
 
-// bulk load all data in one piece
-fun prepareTrainDataVG(path: File): ImageDataSet {
-    val (images, imageData) = path.listFiles({ file -> file.extension == "jpg" })
-        .toList().loadImagesVGG()
+fun main(args: Array<String>) {
 
-    val labelConverter by lazy { File2LabelConverter() }
+    //    val dsIterator = createRecReaderDataIterator(File(DATA_ROOT, "train_photos"), batchSize = 10)
+    val dsIterator = playground.buildDataSetIterator(File(DATA_ROOT, "train_photos"), batchSize = 10)
 
-    val labels = images.map { it.nameWithoutExtension }.map { labelConverter.buildIndicator(it) }
-
-    // https://nd4j.org/userguide#creating
-    // val data =listOf(Nd4j.create(doubleArrayOf(12.0,3.0)), Nd4j.create(doubleArrayOf(12.0,3.0)))
-
-    val ndFeatures = Nd4j.vstack(imageData.map { it })
-    val ndLabels = Nd4j.vstack(labels.map { Nd4j.create(it) })
-
-    return ImageDataSet(images, DataSet(ndFeatures, ndLabels))
+    for (dataSet in dsIterator) {
+        val featureMatrix = dataSet.featureMatrix
+        val labels = dataSet.labels
+        print("features: ${featureMatrix.shapeInfoToString()}")
+        print("labels ${labels.shapeInfoToString()}")
+    }
 }
+
 
 fun prepareTestData(path: File, numExamples: Int = Int.MAX_VALUE, batchSize: Int = 200): Sequence<Pair<List<File>, INDArray>> {
     val testImages = path.listFiles({ file -> file.extension == "jpg" }).toList()
