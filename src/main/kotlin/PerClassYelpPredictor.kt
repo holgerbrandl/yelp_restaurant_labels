@@ -114,7 +114,7 @@ fun perClassCNN(trainData: DataSetIterator, validationData: DataSetIterator, num
 
     // todo later: run multiple epochs over the data
     //    val numEpochs = 15 // number of epochs to perform
-    val numEpochs = 2
+    val numEpochs = 4
 
     // replaced with extension function because inherently broken (see https://github.com/deeplearning4j/deeplearning4j/issues/5110)
     //    val epochitTr = MultipleEpochsIterator(numEpochs, trainData)
