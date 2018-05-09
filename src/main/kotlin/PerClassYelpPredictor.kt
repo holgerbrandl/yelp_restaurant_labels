@@ -1,5 +1,6 @@
+import me.tongfei.progressbar.ProgressBar
+import me.tongfei.progressbar.ProgressBarStyle
 import org.datavec.api.records.metadata.RecordMetaDataURI
-import org.deeplearning4j.datasets.iterator.MultipleEpochsIterator
 import org.deeplearning4j.eval.Evaluation
 import org.deeplearning4j.nn.api.Model
 import org.deeplearning4j.nn.api.OptimizationAlgorithm
@@ -12,14 +13,15 @@ import org.deeplearning4j.nn.conf.layers.SubsamplingLayer
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork
 import org.deeplearning4j.nn.weights.WeightInit
 import org.deeplearning4j.optimize.api.BaseTrainingListener
-import org.deeplearning4j.optimize.listeners.ScoreIterationListener
 import org.nd4j.linalg.activations.Activation
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator
 import org.nd4j.linalg.learning.config.Nesterovs
 import org.nd4j.linalg.lossfunctions.LossFunctions
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.IOException
+import java.net.InetAddress
 
 /**
  * @author Holger Brandl
@@ -30,16 +32,28 @@ fun main(args: Array<String>) {
 
     val label = YelpLabel.GOOD_FOR_KIDS
 
-    //    if(InetAddress.getLocalHost().getHostName().startsWith("scicomp"))
-    val maxTrainExamples = 1000
-    val maxTestExamples = 1000
+    buildAndEvalModel(label)
+
+
+    //    // for actual submission do all labels and merge result sets
+    //    for(label in YelpLabel.values()){
+    //        buildAndEvalModel(label)
+    //    }
+    //    // todo
+}
+
+private fun buildAndEvalModel(label: YelpLabel) {
+    val isLocal = InetAddress.getLocalHost().getHostName().startsWith("scicomp")
+    val maxTrainExamples = if (isLocal) 1000 else Int.MAX_VALUE
+    val maxTestExamples = if (isLocal) 1000 else Int.MAX_VALUE
+    val batchSize = 255
 
     val file2Label = TwoClassLabelConverter(label)
 
-    val (trainData, validationData) = prepareTrainingData(file2Label, maxExamples = maxTrainExamples)
+    val (trainData, validationData) = prepareTrainingData(file2Label, maxExamples = maxTrainExamples, batchSize = batchSize)
 
 
-    println("Building model....")
+    println("Building model for ${label} ....")
 
     val (model, modelName) = perClassCNN(trainData, validationData, file2Label.numClasses) to "custom_cnn";
     model.save(File("${modelName}.${label}.${now}.dat"))
@@ -47,7 +61,7 @@ fun main(args: Array<String>) {
     //    val model = MultiLayerNetwork.load(mostRecent("custom_cnn"), false)
 
 
-    println("Evaluating model....")
+    println("Evaluating model for ${label} ....")
 
     //    println(model.summary())
     //    println(model.conf().toJson())
@@ -100,7 +114,10 @@ fun perClassCNN(trainData: DataSetIterator, validationData: DataSetIterator, num
 
     // todo later: run multiple epochs over the data
     //    val numEpochs = 15 // number of epochs to perform
-    val epochitTr = MultipleEpochsIterator(4, trainData)
+    val numEpochs = 2
+
+    // replaced with extension function because inherently broken (see https://github.com/deeplearning4j/deeplearning4j/issues/5110)
+    //    val epochitTr = MultipleEpochsIterator(numEpochs, trainData)
 
 
     val log = LoggerFactory.getLogger("conv_model_trainer")
@@ -175,16 +192,10 @@ fun perClassCNN(trainData: DataSetIterator, validationData: DataSetIterator, num
 
     val model = MultiLayerNetwork(conf).apply {
         init()
-        addListeners(ScoreIterationListener(1))
 
-        addListeners(object : BaseTrainingListener() {
-            override fun onEpochEnd(model: Model?) {
-                (model as MultiLayerNetwork).evaluateOn(validationData).let {
-                    // tood maybe log epoch with layers.last().epochCount
-                    println("model metrics after epoch, are ${it.stats()}")
-                }
-            }
-        })
+        //        addListeners(ScoreIterationListener(1))
+        addListeners(EpochProgressListener(trainData))
+        addListeners(TrainValidationCallback(validationData, log))
 
         println(summary())
     }
@@ -192,8 +203,7 @@ fun perClassCNN(trainData: DataSetIterator, validationData: DataSetIterator, num
     log.info("Train model....")
 
 
-    //    model.fit(trainData)
-    model.fit(epochitTr)
+    model.fit(trainData, numEpochs = 5)
 
 
     // do final evaluation
@@ -201,6 +211,49 @@ fun perClassCNN(trainData: DataSetIterator, validationData: DataSetIterator, num
 
     return model;
 }
+
+class TrainValidationCallback(val validationData: DataSetIterator, val logger: Logger) : BaseTrainingListener() {
+
+    var epochCounter = 0
+
+    override fun onEpochEnd(model: Model?) {
+
+        logger.info("Score after epoch ${epochCounter} ${model!!.score()}")
+
+        (model as MultiLayerNetwork).evaluateOn(validationData).let {
+            // tood maybe log epoch with layers.last().epochCount
+            println("model metrics after epoch, are ${it.stats()}")
+        }
+    }
+}
+
+class EpochProgressListener(private val trainData: DataSetIterator) : BaseTrainingListener() {
+
+
+    lateinit var pb: ProgressBar
+    var epochCounter = 0
+    var epochIteration: Long = 0;
+
+
+    override fun onEpochStart(model: Model?) {
+        pb = ProgressBar("Epoch No${epochCounter++}", (trainData.numExamples() / trainData.batch()).toLong(), ProgressBarStyle.ASCII)
+        pb.start()
+        epochIteration = 0
+    }
+
+    override fun onEpochEnd(model: Model?) {
+        pb.stop()
+
+    }
+
+    override fun iterationDone(model: Model?, iteration: Int, epoch: Int) {
+        //        pb.stepTo(iteration.toLong())// reports total iteration an not epoch relative ones
+        pb.stepTo(epochIteration++)
+    }
+}
+
+fun MultiLayerNetwork.fit(dsi: DataSetIterator, numEpochs: Int) = repeat(numEpochs) { fit(dsi) }
+
 
 fun MultiLayerNetwork.evaluateOn(testData: DataSetIterator): Evaluation {
     // note this way to detect the number of output classes may not work depending on model topology

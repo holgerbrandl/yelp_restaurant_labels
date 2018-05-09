@@ -38,7 +38,7 @@ internal fun buildVggTransferModel(allTrainDS: DataSet): ComputationGraph? {
     //number of rows and columns in the input pictures
     print("structure of vgg model is: ${vgg.summary()}")
 
-    // from /Users/brandl/projects/deep_learning/dl4j-examples/dl4j-spark-examples/dl4j-spark/src/playground.main/java/org/deeplearning4j/transferlearning/vgg16/README.md
+    // from /Users/brandl/projects/deep_learning/dl4j-examples/dl4j-spark-examples/dl4j-spark/src/playground.playground.main/java/org/deeplearning4j/transferlearning/vgg16/README.md
     val fineTuneConf = FineTuneConfiguration.Builder()
         .updater(Nesterovs(5e-5))
         .seed(23)
@@ -62,7 +62,7 @@ internal fun buildVggTransferModel(allTrainDS: DataSet): ComputationGraph? {
 
     //    println(vgg.configuration.toJson())
 
-    // see /Users/brandl/projects/deep_learning/dl4j-examples/dl4j-spark-examples/dl4j-spark/src/playground.main/java/org/deeplearning4j/transferlearning/vgg16/TransferLearning.md
+    // see /Users/brandl/projects/deep_learning/dl4j-examples/dl4j-spark-examples/dl4j-spark/src/playground.playground.main/java/org/deeplearning4j/transferlearning/vgg16/TransferLearning.md
     val model = TransferLearning.GraphBuilder(vgg)
         .fineTuneConfiguration(fineTuneConf)
         .setFeatureExtractor("fc2")
@@ -84,7 +84,7 @@ internal fun buildVggTransferModel(allTrainDS: DataSet): ComputationGraph? {
     })
 
     //     other vgg16 transfer learning example
-    //    /Users/brandl/projects/deep_learning/dl4j-examples/dl4j-examples/src/playground.main/java/org/deeplearning4j/examples/transferlearning/vgg16/EditLastLayerOthersFrozen.java
+    //    /Users/brandl/projects/deep_learning/dl4j-examples/dl4j-examples/src/playground.playground.main/java/org/deeplearning4j/examples/transferlearning/vgg16/EditLastLayerOthersFrozen.java
     //    // train shape
     //    result = {int[4]@2386}
     //    0 = 15

@@ -200,6 +200,8 @@ fun createTrainRecReaderDataIterator(
     // todo simplify to just use PathLabelGenerator in case of 2 classes
     //    val labelConverter = TwoClassLabelConverter(3)
 
+    val imagesFiles = files.take(maxExamples).also { require(it.all { it.extension == "jpg" }) }
+
 
     val pathLabelGen = labelConverter?.let {
         PathMultiLabelGenerator { uriPath ->
@@ -213,15 +215,18 @@ fun createTrainRecReaderDataIterator(
         init {
             imageTransform = trafo
 
-            val jpgFiles = files.take(maxExamples).also { require(it.all { it.extension == "jpg" }) }
             //            val splitTrainNum = ceil(jpgFiles.size * 0.8).toInt() // 80/20 training/test split
 
-            initialize(CollectionInputSplit(jpgFiles.map { it.toURI() }))
+            initialize(CollectionInputSplit(imagesFiles.map { it.toURI() }))
         }
     }
 
 
-    return RecordReaderDataSetIterator(recordReader, batchSize, 1, 2)
+    return object : RecordReaderDataSetIterator(recordReader, batchSize, 1, 2) {
+        override fun numExamples(): Int {
+            return imagesFiles.size
+        }
+    }
 }
 
 fun createTestRecReaderDataIterator(
