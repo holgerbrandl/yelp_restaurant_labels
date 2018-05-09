@@ -32,7 +32,7 @@ plugins{
 application {
 //    mainClassName = "com.github.holgerbrandl.Tester"
     //    mainClassName = "VggTransferKt"
-    mainClassName = "PredictYelpLabelsKt"
+    mainClassName = "PerClassYelpPredictorKt"
 }
 
 //http://www.gubatron.com/blog/2017/07/20/how-to-run-your-kotlin-gradle-built-app-from-the-command-line/
@@ -55,7 +55,7 @@ val nd4jVersion = "1.0.0-alpha"
 //val nd4jVersion = "1.0.0-SNAPSHOT"
 
 dependencies {
-    compile(kotlinModule("stdlib-jdk8", kotlin_version))
+    compile(kotlin("stdlib-jdk8", kotlin_version))
 
     compile("org.nd4j","nd4j-native-platform","1.0.0-alpha")
     //    compile("org.nd4j","nd4j-cuda-8.0-platform","1.0.0-alpha")
